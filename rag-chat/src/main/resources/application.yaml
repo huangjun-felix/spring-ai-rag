@@ -1,0 +1,57 @@
+server:
+  port: 0
+  servlet:
+    context-path: /admin
+
+spring:
+#  datasource:
+#    driver-class-name: com.mysql.cj.jdbc.Driver
+#    url: jdbc:mysql://47.100.32.35:3306/springrag?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=GMT%2B8
+#    username: root
+#    password: 123456
+#  data:
+#    redis:
+##      password: 123456
+#      port: 6378
+#      host: 47.100.32.35
+#  minio:
+#    endpoint: http://192.168.1.137:9000
+#    access-key: minioadmin
+#    secret-key: minioadmin
+#    bucket-name: my-bucket
+#
+#  ai:
+#    openai:
+#      base-url: https://dashscope.aliyuncs.com/compatible-mode
+#      api-key: sk-45427532556f4ed58193831cfabf469c
+#      chat:
+#        options:
+#          model: qwen3.6-plus
+#      embedding:
+#        options:
+#          model: text-embedding-v3
+#          dimensions: 1024
+#    vectorstore:
+#      redis:
+#        initialize-schema: true
+#        index-name: spring-ai-index
+##
+  application:
+    name: rag-chat
+  config:
+    import:
+      - optional:nacos:common.yaml?refreshEnabled=true
+      - optional:nacos:chat-ai.yaml?refreshEnabled=true
+  cloud:
+    nacos:
+      server-addr: 192.168.1.137:8848
+      #        namespace: dev/rag
+      username: nacos                # 补充账号
+      password: nacos
+      discovery:
+      config:
+        file-extension: yaml
+        group: DEFAULT_GROUP
+        namespace: 1e904b53-b8e2-48e9-b8d5-203235a70a2b
+#
+#

@@ -1,0 +1,23 @@
+server:
+  port: 0
+  servlet:
+    context-path: /admin
+spring:
+  application:
+    name: rag-file
+
+  config:
+    import:
+      - optional:nacos:common.yaml?refreshEnabled=true
+      - optional:nacos:chat-ai.yaml?refreshEnabled=true
+  cloud:
+    nacos:
+      server-addr: 192.168.1.137:8848
+      #        namespace: dev/rag
+      username: nacos                # 补充账号
+      password: nacos
+      discovery:
+      config:
+        file-extension: yaml
+        group: DEFAULT_GROUP
+        namespace: 1e904b53-b8e2-48e9-b8d5-203235a70a2b

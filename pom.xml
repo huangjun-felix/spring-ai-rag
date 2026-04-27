@@ -13,6 +13,7 @@
     <version>0.0.1-SNAPSHOT</version>
     <name>spring-ai-rag</name>
     <description>spring-ai-rag</description>
+    <packaging>pom</packaging>
     <url/>
     <licenses>
         <license/>
@@ -29,6 +30,8 @@
     <properties>
         <java.version>17</java.version>
         <spring-ai.version>1.1.4</spring-ai.version>
+        <cloud-alibaba.version>2025.0.0.0</cloud-alibaba.version>
+        <spring-cloud.version>2025.0.2</spring-cloud.version>
     </properties>
     <dependencies>
         <dependency>
@@ -77,6 +80,15 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.4.5</version>
+        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>
@@ -84,6 +96,20 @@
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
                 <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>${cloud-alibaba.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -143,4 +169,12 @@
         </plugins>
     </build>
 
+    <modules>
+        <module>rag-common</module>
+        <module>rag-file</module>
+        <module>rag-chat</module>
+        <module>rag-gateway</module>
+        <module>rag-feign</module>
+        <module>kafka-test</module>
+    </modules>
 </project>

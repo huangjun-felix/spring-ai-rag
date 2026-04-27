@@ -1,0 +1,33 @@
+server:
+  port: 0
+  servlet:
+    context-path: /admin
+spring:
+
+  kafka:
+    bootstrap-servers: 192.168.1.137:9094,192.168.1.137:9095,192.168.1.137:9096
+    consumer:
+#      group-id: my-default-group
+      auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  application:
+    name: kafka-provider
+
+  config:
+    import:
+      - optional:nacos:common.yaml?refreshEnabled=true
+      - optional:nacos:chat-ai.yaml?refreshEnabled=true
+  cloud:
+    nacos:
+      server-addr: 192.168.1.137:8848
+      #        namespace: dev/rag
+      username: nacos                # 补充账号
+      password: nacos
+      discovery:
+      config:
+        file-extension: yaml
+        group: DEFAULT_GROUP
+        namespace: 1e904b53-b8e2-48e9-b8d5-203235a70a2b
