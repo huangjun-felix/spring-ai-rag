@@ -15,6 +15,17 @@ spring:
         server-addr: 192.168.1.137:8848
         username: nacos
         password: nacos
+#    sentinel:
+#      datasource:
+#        nacos-ds:
+#          nacos:
+#            server-addr: 192.168.1.137:8848
+#            username: nacos
+#            password: nacos
+#            data-id: ${spring.application.name}-sentinel-gateway-flow
+#            group-id: DEFAULT_GROUP
+#            rule-type: gw_flow
+#            namespace: 123
     gateway:
       server:
         webflux:

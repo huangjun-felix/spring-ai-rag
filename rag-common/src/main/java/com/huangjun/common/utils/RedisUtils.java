@@ -46,7 +46,7 @@ public class RedisUtils {
     }
 
     public static void setHash(String key, String field , Object value) {
-        RedisUtils.stringRedisTemplate.opsForHash().put(key, field, value);
+        RedisUtils.redisTemplate.opsForHash().put(key, field, value);
     }
     public static void setFileInfoHash(String key, String field , FileInfo value) {
         RedisUtils.redisTemplate.opsForHash().put(key, field, value);
