@@ -2,6 +2,8 @@
 
 > A Retrieval-Augmented Generation (RAG) knowledge base Q&A system built with Spring Cloud microservices architecture and Spring AI
 
+> 💡 **Static Demo**: Pure frontend version (no backend), deployable to Netlify. See "Static Demo Deployment" below.
+
 ## 📖 Project Introduction
 
 This project is a knowledge base Q&A system that supports PDF file upload, intelligent parsing, parent-child index vector storage, and AI-powered conversational retrieval. Users can upload PDF files, which are automatically processed through text extraction, OCR fallback, AI structural cleansing, vector database storage, and Elasticsearch keyword search. A chat interface enables intelligent Q&A about the uploaded document contents.
