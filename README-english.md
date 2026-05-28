@@ -86,26 +86,27 @@ This project is a knowledge base Q&A system that supports PDF file upload, intel
 > Screenshot placeholders — replace with actual project screenshots
 
 ### Main Interface
-![Main Interface](./docs/screenshot-main.png)
+![image-20260528220727804](D:\typro\picture\image-20260528220727804.png)
 
 ### File Upload
+
 ![File Upload](./docs/screenshot-upload.png)
 
 ### Multi-Session Management
-![Session Management](./docs/screenshot-sessions.png)
+![image-20260528220758168](D:\typro\picture\image-20260528220758168.png)
 
 ### AI Q&A
-![AI Q&A](./docs/screenshot-chat.png)
+![image-20260528220758168](D:\typro\picture\image-20260528220758168.png)
 
 ---
 
 ## 🌐 Online Demo
 
-> **Demo URL**: [http://your-domain.com:3000](http://your-domain.com:3000)
+> **Demo URL**:https://6a184a3989808f00a084d934--spring-ai-rag.netlify.app/
 
 | Access Method | Description |
 |---------------|-------------|
-| Web | Directly visit `http://localhost:3000` |
+| Web | Directly visit `https://6a184a3989808f00a084d934--spring-ai-rag.netlify.app/` |
 | Test Account | No login required, start using immediately |
 
 ---

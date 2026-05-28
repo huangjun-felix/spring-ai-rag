@@ -86,26 +86,28 @@
 > 截图占位，请替换为实际项目截图
 
 ### 主界面
-![主界面](./docs/screenshot-main.png)
+
+![image-20260528220727804](D:\typro\picture\image-20260528220727804.png)
 
 ### 上传文件
-![上传文件](./docs/screenshot-upload.png)
+
+
 
 ### 多会话管理
-![会话管理](./docs/screenshot-sessions.png)
+![image-20260528220758168](D:\typro\picture\image-20260528220758168.png)
 
 ### AI 问答
-![AI 问答](./docs/screenshot-chat.png)
+![image-20260528221336090](D:\typro\picture\image-20260528221336090.png)
 
 ---
 
 ## 🌐 在线 Demo
 
-> **Demo 地址**：[http://your-domain.com:3000](http://your-domain.com:3000)
+> **Demo 地址**：[https://6a184a3989808f00a084d934--spring-ai-rag.netlify.app/](http://your-domain.com:3000)
 
 | 访问方式 | 说明 |
 |---------|------|
-| Web | 直接访问前端地址 `http://localhost:3000` |
+| Web | 直接访问前端地址 `https://6a184a3989808f00a084d934--spring-ai-rag.netlify.app/` |
 | 测试账号 | 无需登录，直接开始使用 |
 
 ---
@@ -116,11 +118,11 @@
 
 | 服务 | 地址（示例） | 用途 |
 |------|-------------|------|
-| Nacos | 192.168.1.137:8848 | 服务注册与配置中心 |
-| MySQL | 47.100.32.35:3306 | 业务数据存储 |
-| Redis | 47.100.32.35:6379 | 向量存储 + 会话缓存 |
-| Elasticsearch | 192.168.1.137:9200 | 关键词检索 |
-| MinIO | 192.168.1.137:9000 | 文件对象存储 |
+| Nacos | <你的地址>:8848 | 服务注册与配置中心 |
+| MySQL | <...>:3306 | 业务数据存储 |
+| Redis | <...>:6379 | 向量存储 + 会话缓存 |
+| Elasticsearch | <...>:9200 | 关键词检索 |
+| MinIO | <...>:9000 | 文件对象存储 |
 | DashScope | https://dashscope.aliyuncs.com | 通义千问 API |
 
 ### 1. 数据库初始化
