@@ -19,8 +19,8 @@ public class ChatMessageDataRepository {
     private final ChatMessageDataMapper chatMessageDataMapper;
 
     public void save(ChatMessage chatMessage) {
-        RedisUtils.chatMessagePush(RedisConstants.SESSION_MESSAGE+chatMessage.getSessionId(), Collections.singletonList(chatMessage));
         chatMessageDataMapper.insert(chatMessage);
+        RedisUtils.chatMessagePush(RedisConstants.SESSION_MESSAGE+chatMessage.getSessionId(), Collections.singletonList(chatMessage));
     }
 
     public List<ChatMessage> selectMessageBySessionId(String conversationId) {

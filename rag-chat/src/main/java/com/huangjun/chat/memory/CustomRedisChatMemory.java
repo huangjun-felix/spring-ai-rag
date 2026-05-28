@@ -52,7 +52,7 @@ public class CustomRedisChatMemory implements ChatMemory {
         List<ChatMessage> dtoList = redisTemplate.opsForList().range(key, Integer.MIN_VALUE, -1);
         if (dtoList == null || dtoList.isEmpty()) {
             List<ChatMessage> chatMessageDTOS = chatMessageService.selectMessageBySessionId(conversationId);
-            if (dtoList == null || dtoList.isEmpty()) return List.of();
+            if (chatMessageDTOS == null || chatMessageDTOS.isEmpty()) return List.of();
             redisTemplate.opsForList().rightPushAll(key, chatMessageDTOS);
             redisTemplate.expire(key, 7, TimeUnit.HOURS);
             dtoList = chatMessageDTOS;

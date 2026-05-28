@@ -20,6 +20,9 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public void save(ChatMessage chatMessage) {
+        if (chatRepository.existsBySessionId(chatMessage.getSessionId())) {
+            return;
+        }
         Chat chat = new Chat();
         chat.setSessionId(chatMessage.getSessionId());
         chat.setDate(new Date());

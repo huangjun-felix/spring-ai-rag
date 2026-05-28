@@ -1,5 +1,7 @@
 server:
   port: 8080
+  tomcat:
+    max-swallow-size: 100MB
 
 spring:
   main:
@@ -53,7 +55,7 @@ spring:
             - id: chat_route
               uri: lb://rag-chat
               predicates:
-                - Path=/admin/ai/**
+                - Path=/admin/ai/**,/admin/es/**,/admin/common/**
 
             - id: kafka-provider-route
               uri: lb://kafka-provider

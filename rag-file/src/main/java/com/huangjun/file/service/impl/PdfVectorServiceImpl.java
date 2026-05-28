@@ -1,5 +1,6 @@
 package com.huangjun.file.service.impl;
 
+import com.huangjun.common.service.DocumentData;
 import com.huangjun.file.constants.PromptConstants;
 import com.huangjun.file.repository.PdfVectorRepository;
 import com.huangjun.file.service.PdfVectorService;
@@ -32,6 +33,8 @@ import java.util.concurrent.Executor;
 @Service
 public class PdfVectorServiceImpl implements PdfVectorService {
     private static final Logger logger = LoggerFactory.getLogger(PdfVectorServiceImpl.class);
+    private record ParentChildResult(List<DocumentData> parents, List<DocumentData> children, List<Document> vectorDocs) {}
+
     private PdfVectorRepository pdfVectorRepository;
     private ChatClient chatClient;
     private Executor taskScheduler;
@@ -142,118 +145,146 @@ public class PdfVectorServiceImpl implements PdfVectorService {
     }
 
     public void savePdfVector(Resource resource, String sessionId) throws IOException {
-        if (!pdfIsEnableInVector(resource,sessionId)){
-            return;
-        }
-        String string = parsePdf(resource.getInputStream());
-//        System.out.println("String:"+string);
-//                PagePdfDocumentReader reader = new PagePdfDocumentReader(
-//                resource,
-//                PdfDocumentReaderConfig.builder()
-//                        .withPagesPerDocument(1)
-//                        .build()
-//        );
-//        List<Document> documents = reader.read();
-//        documents.forEach(document -> document.getMetadata().put("session_id",sessionId));
-//        用这个将pdf的内容分成一页一页
-//        PagePdfDocumentReader reader = new PagePdfDocumentReader(
-//                resource,
-//                PdfDocumentReaderConfig
-//                        .builder()
-//                        .withPagesPerDocument(1)
-//                        .build()
-//        );
-//        List<Document> documents = reader.get();
-        Document documents = Document.builder()
-                .text(string)
-                .metadata("session_id", sessionId)
-                .build();
-        //设置想要ai输出的json格式
+        if (!pdfIsEnableInVector(resource, sessionId)) return;
+        String pdfText = parsePdf(resource.getInputStream());
+        if (!StringUtils.hasText(pdfText)) { logger.error("PDF 文本提取结果为空"); return; }
+        logger.info("PDF 文本提取完成，共 {} 个字符", pdfText.length());
+
         BeanOutputConverter<ResumeData> converter = new BeanOutputConverter<>(ResumeData.class);
-        String format = converter.getFormat();
-        //加到prompt提示词中
-        String systemPrompt = PromptConstants.PDF_CLEAR_PROMPT + "\n\n【重要】请严格按照以下 JSON 格式输出，不要包含任何 Markdown 标记：\n" + format;
-        //构建token拆分器
-        TokenTextSplitter splitter = TokenTextSplitter
-                .builder()
-                .withChunkSize(2000)
-                .withKeepSeparator(true)
-                .build();
-        //将pdf拆分为800token，
-        List<Document> splitterDocuments = splitter.split(documents);
+        String systemPrompt = PromptConstants.PDF_CLEAR_PROMPT
+                + "\n\n【重要】请严格按照以下 JSON 格式输出，不要包含任何 Markdown 标记：\n" + converter.getFormat();
 
-        List<CompletableFuture<List<Document>>> futureList = splitterDocuments
-                .stream().filter(doc->StringUtils.hasText(doc.getText()))
-                .map(document -> CompletableFuture.supplyAsync(()->{
-                    String text = document.getText();
-                    try {
-                        String jsonResponse = chatClient.prompt()
-                                .system(systemPrompt)
-                                .user(text)
-                                .call()
-                                .content();
-                        if (!StringUtils.hasText(jsonResponse)) return Collections.<Document>emptyList();
-                        ResumeData resumeData = converter.convert(jsonResponse);
-                        return convertToVectorDocuments(resumeData,sessionId);
-                    }catch (Exception e){
-                        System.out.println("处理 PDF 页码 " + document.getMetadata().get("page_number") + " 时出错: " + e.getMessage());
-                        return Collections.<Document>emptyList();
-                    }
-                },taskScheduler))
-                .toList();
+        ParentChildResult result;
+        if (pdfText.length() <= 8000) {
+            result = processChunkWithParentChild(pdfText, systemPrompt, converter, sessionId);
+        } else {
+            result = processInParallelWithParentChild(pdfText, systemPrompt, converter, sessionId);
+        }
 
-        List<Document> allVectorDocuments = futureList.stream()
-                .map(CompletableFuture::join)
-                .flatMap(List::stream)
-                .toList();
-        if (allVectorDocuments.isEmpty())return;
+        if (result.vectorDocs().isEmpty()) { logger.warn("向量数据为空"); return; }
 
-
-
-//        for (Document document : splitterDocuments) {
-//            String text = document.getText();
-//            if (!StringUtils.hasText(text)) continue;
-//            try {
-//                CompletableFuture<String> response = getStringClient(systemPrompt,text);
-//                String jsonResponse = response.get();
-//                if (!StringUtils.hasText(jsonResponse)) continue;
-//                ResumeData resumeData = converter.convert(jsonResponse);
-//                List<Document> documentList = convertToVectorDocuments(resumeData, sessionId);
-//                allVectorDocuments.addAll(documentList);
-//            }catch (Exception e){
-//                System.out.println("处理 PDF 页码 " + document.getMetadata().get("page_number") + " 时出错: " + e.getMessage());
-//            }
-//        }
-//        System.out.println("allVectorDocuments:"+ allVectorDocuments);
-//        String pdfText = chatClient.prompt(systemPrompt)
-//                .user()
-//                .call()
-//                .content();
-//        System.out.println("pdfText: "+pdfText);
-//        if (!StringUtils.hasText(pdfText)){
-//            return;
-//        }
-//        System.out.println("pdfText: "+pdfText);
-//        List<Document> documents = processAndSaveResume(pdfText, sessionId);
-        pdfVectorRepository.savePdfVector(allVectorDocuments);
+        List<DocumentData> entities = extractEntities(result.parents(), sessionId);
+        pdfVectorRepository.savePdfVectorWithGraph(result.vectorDocs(), result.parents(), result.children(), entities);
+        logger.info("父子索引+GraphRAG完成: 父块={} 子块={} 实体={}", result.parents().size(), result.children().size(), entities.size());
     }
 
+    // ==================== 父子索引 ====================
+    private ParentChildResult buildParentChildResult(ResumeData data, String sessionId) {
+        List<DocumentData> parents = new ArrayList<>();
+        List<DocumentData> children = new ArrayList<>();
+        List<Document> vectorDocs = new ArrayList<>();
+        for (Section section : data.sections()) {
+            String fullText = String.join("\n", section.contents());
+            DocumentData parent = DocumentData.parent(section.title(), section.contents(), fullText, sessionId, new Date());
+            parents.add(parent);
+            vectorDocs.addAll(convertToVectorDocs(section, sessionId));
+            for (String content : section.contents()) {
+                children.add(DocumentData.child(section.title(), content, parent.getId(), sessionId, new Date()));
+            }
+        }
+        return new ParentChildResult(parents, children, vectorDocs);
+    }
+
+    private ParentChildResult processChunkWithParentChild(String text, String systemPrompt,
+                                                          BeanOutputConverter<ResumeData> converter, String sessionId) {
+        try {
+            String json = chatClient.prompt().system(systemPrompt).user(text).call().content();
+            if (!StringUtils.hasText(json)) return emptyResult();
+            ResumeData data = converter.convert(json);
+            if (data.sections() == null || data.sections().isEmpty()) return emptyResult();
+            return buildParentChildResult(data, sessionId);
+        } catch (Exception e) { logger.error("AI 处理失败", e); return emptyResult(); }
+    }
+
+    private ParentChildResult processInParallelWithParentChild(String text, String systemPrompt,
+                                                               BeanOutputConverter<ResumeData> converter, String sessionId) {
+        TokenTextSplitter splitter = TokenTextSplitter.builder().withChunkSize(5000).withKeepSeparator(true).build();
+        List<Document> chunks = splitter.split(Document.builder().text(text).build());
+        List<CompletableFuture<ParentChildResult>> futures = chunks.stream()
+                .filter(doc -> StringUtils.hasText(doc.getText()))
+                .map(doc -> CompletableFuture.supplyAsync(
+                        () -> processChunkWithParentChild(doc.getText(), systemPrompt, converter, sessionId), taskScheduler))
+                .toList();
+        List<ParentChildResult> results = futures.stream().map(CompletableFuture::join).toList();
+        return new ParentChildResult(
+                results.stream().flatMap(r -> r.parents().stream()).toList(),
+                results.stream().flatMap(r -> r.children().stream()).toList(),
+                results.stream().flatMap(r -> r.vectorDocs().stream()).toList());
+    }
+
+    private ParentChildResult emptyResult() {
+        return new ParentChildResult(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+    }
+
+    private List<Document> convertToVectorDocs(Section section, String sessionId) {
+        List<Document> docs = new ArrayList<>();
+        if (section.contents() == null) return docs;
+        for (String content : section.contents()) {
+            Map<String, Object> meta = new HashMap<>();
+            meta.put("session_id", sessionId); meta.put("section_title", section.title());
+            docs.add(new Document("【" + section.title() + "】 " + content, meta));
+        }
+        return docs;
+    }
+
+    // ==================== 实体抽取 (GraphRAG) ====================
+    private List<DocumentData> extractEntities(List<DocumentData> parents, String sessionId) {
+        try {
+            StringBuilder ctx = new StringBuilder();
+            for (DocumentData p : parents) {
+                ctx.append("【").append(p.getTitle()).append("】\n");
+                if (p.getFullText() != null) ctx.append(p.getFullText()).append("\n\n");
+            }
+            String prompt = "从以下文本提取关键实体，仅返回JSON数组: [{\"name\":\"实体名\",\"type\":\"类型\"},...]\n类型: PERSON/SCHOOL/COMPANY/PROJECT/TECH/SKILL\n文本:\n" + ctx;
+            String resp = chatClient.prompt().user(prompt).call().content();
+            if (!StringUtils.hasText(resp)) return Collections.emptyList();
+            return parseEntities(resp.replaceAll("```json?", "").replaceAll("```", "").trim(), parents, sessionId);
+        } catch (Exception e) { logger.error("实体抽取失败", e); return Collections.emptyList(); }
+    }
+
+    private List<DocumentData> parseEntities(String json, List<DocumentData> parents, String sessionId) {
+        List<DocumentData> entities = new ArrayList<>();
+        for (String part : json.split("\\},\\s*\\{")) {
+            String name = extractField(part, "name");
+            String type = extractField(part, "type");
+            if (name != null && type != null) {
+                String pid = findRelatedParent(name, type, parents);
+                String section = parents.stream().filter(p -> p.getId().equals(pid)).map(DocumentData::getTitle).findFirst().orElse("");
+                entities.add(DocumentData.entity(name, type, pid, section, sessionId, new Date()));
+            }
+        }
+        return entities;
+    }
+
+    private String extractField(String part, String field) {
+        int idx = part.indexOf(field + "\":");
+        if (idx < 0) idx = part.indexOf(field + ":");
+        if (idx < 0) return null;
+        int start = part.indexOf(':', idx) + 1;
+        while (start < part.length() && (part.charAt(start) == ' ' || part.charAt(start) == '"')) start++;
+        int end = start;
+        while (end < part.length() && part.charAt(end) != ',' && part.charAt(end) != '\n' && part.charAt(end) != '"') end++;
+        String v = part.substring(start, end).trim().replaceAll("\"", "");
+        return v.isEmpty() ? null : v;
+    }
+
+    private String findRelatedParent(String name, String type, List<DocumentData> parents) {
+        for (DocumentData p : parents) if (p.getTitle().contains(name)) return p.getId();
+        String expected = switch (type) { case "SCHOOL" -> "教育背景"; case "TECH","SKILL" -> "专业技能"; case "PROJECT" -> "项目经验"; case "COMPANY" -> "工作经历"; default -> null; };
+        if (expected != null) for (DocumentData p : parents) if (p.getTitle().contains(expected)) return p.getId();
+        return parents.isEmpty() ? null : parents.get(0).getId();
+    }
+
+    // ==================== 旧方法保留 ====================
     private List<Document> convertToVectorDocuments(ResumeData data, String sessionId) {
         List<Document> docs = new ArrayList<>();
         if (data.sections() == null) return docs;
-
-        for (Section section : data.sections()) {
+        for (Section section : data.sections())
             for (String content : section.contents()) {
-                // 组装文本：【模块名】具体内容
-                String text = "【" + section.title() + "】 " + content;
-                // 构建带元数据的 Document，方便检索
-                Map<String, Object> metadata = new HashMap<>();
-                metadata.put("session_id", sessionId);
-                metadata.put("section_title", section.title());
-
-                docs.add(new Document(text, metadata));
+                Map<String, Object> meta = new HashMap<>();
+                meta.put("session_id", sessionId); meta.put("section_title", section.title());
+                docs.add(new Document("【" + section.title() + "】 " + content, meta));
             }
-        }
         return docs;
     }
 

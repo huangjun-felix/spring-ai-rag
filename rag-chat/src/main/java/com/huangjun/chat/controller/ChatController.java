@@ -2,82 +2,88 @@ package com.huangjun.chat.controller;
 
 import com.huangjun.chat.service.ChatMessageDataService;
 import com.huangjun.chat.service.ChatService;
+import com.huangjun.chat.service.HybridSearchService;
 import com.huangjun.common.domain.ChatMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.util.CollectionUtils;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @RestController
 @RequestMapping("/ai")
 public class ChatController {
-    private ChatClient chatClient;
-    private ChatService chatService;
-    private ChatMessageDataService chatMessageDataService;
-    private VectorStore vectorStore;
-    @Autowired
-    public void setChatClient(@Qualifier("ragClient") ChatClient chatClient,
-                              ChatService chatService,
-                              ChatMessageDataService chatMessageDataService,
-                              @Qualifier("redisVectorStore") VectorStore vectorStore
-                              ) {
+    private static final Logger logger = LoggerFactory.getLogger(ChatController.class);
+
+    private final ChatClient chatClient;
+    private final HybridSearchService hybridSearchService;
+    private final ChatService chatService;
+    private final ChatMessageDataService chatMessageDataService;
+
+    public ChatController(@Qualifier("ragClient") ChatClient chatClient,
+                          HybridSearchService hybridSearchService,
+                          ChatService chatService,
+                          ChatMessageDataService chatMessageDataService) {
         this.chatClient = chatClient;
+        this.hybridSearchService = hybridSearchService;
         this.chatService = chatService;
         this.chatMessageDataService = chatMessageDataService;
-        this.vectorStore = vectorStore;
     }
 
-    @PostMapping(value = "/chat",produces = "text/html;charset=utf-8")
-    public String chat(@RequestBody ChatMessage chatMessage){
-//        System.out.println("当前传入的 sessionId: [" + chatMessage.getSessionId() + "]");
-//
-//        List<Document> docs = vectorStore.similaritySearch(
-//                SearchRequest.builder()
-//                        .query("项目经历是什么")
-//                        .filterExpression("session_id == '" + chatMessage.getSessionId() + "'")
-//                        .topK(5)
-//                        .similarityThresholdAll()
-//                        .build()
-//        );
-//
-//        if (docs.isEmpty()) {
-//            System.out.println("❌ 惨了，一条都没查出来！");
-//        } else {
-//            docs.forEach(doc -> System.out.println("✅ 查到了: " + doc.getText()));
-//        }
-//        return "共查到 " + docs.size() + " 条数据";
-//        chatService.save(chatMessage);
-//        chatMessageDataService.save(chatMessage);
-        String message = chatClient.prompt()
-                .user(chatMessage.getMessage())
-                .advisors(a -> a.param(
-                        ChatMemory.CONVERSATION_ID, chatMessage.getSessionId()
-                ))
-                .advisors(a -> a.param(
-                        QuestionAnswerAdvisor.FILTER_EXPRESSION, "session_id == '" + chatMessage.getSessionId() + "'"
-                ))
+    @PostMapping(value = "/chat", produces = "text/html;charset=utf-8")
+    public String chat(@RequestBody ChatMessage chatMessage) {
+        String query = chatMessage.getMessage();
+        String sessionId = chatMessage.getSessionId();
+
+        // 步骤1：保存会话 + 用户消息
+        chatMessage.setType("USER");
+        chatMessage.setDate(new Date());
+        chatService.save(chatMessage);
+        chatMessageDataService.save(chatMessage);
+
+        // 步骤2：混合检索
+        List<Document> docs = hybridSearchService.hybridSearch(query, sessionId);
+        logger.info("混合检索完成: {} 条文档", docs.size());
+
+        String context = docs.isEmpty() ? "" : IntStream.range(0, docs.size())
+                .mapToObj(i -> "[" + (i + 1) + "] " + docs.get(i).getText())
+                .collect(Collectors.joining("\n\n"));
+
+        // 步骤3：调用 LLM 生成回答
+        String answer = chatClient.prompt()
+                .system("你是一个知识库问答助手。\n【已知信息】\n" + (context.isEmpty() ? "无" : context)
+                        + "\n\n【规则】仅根据已知信息回答；无法回答请说明；使用 [1] [2] 引用。")
+                .user(query)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
                 .call()
-//                .stream()
                 .content();
-//        ChatMessage chatMessage1 = new ChatMessage();
-//        chatMessage1.setType(chatMessage.getType());
-//        chatMessage1.setSort(chatMessage.getSort());
-//        chatMessage1.setSessionId(chatMessage.getSessionId());
-//        chatMessage1.setType("SYSTEM");
-//        chatMessage1.setMessage(message);
-//        chatMessageDataService.save(chatMessage1);
-        return message;
+
+        // 步骤4：异步保存 AI 回复
+        saveAssistantMessage(sessionId, answer);
+
+        return answer;
     }
 
+    @Async("taskObAsync")
+    void saveAssistantMessage(String sessionId, String answer) {
+        try {
+            ChatMessage sysMsg = new ChatMessage();
+            sysMsg.setSessionId(sessionId);
+            sysMsg.setMessage(answer);
+            sysMsg.setType("ASSISTANT");
+            sysMsg.setDate(new Date());
+            chatMessageDataService.save(sysMsg);
+        } catch (Exception e) {
+            logger.error("保存 AI 回复失败", e);
+        }
+    }
 }

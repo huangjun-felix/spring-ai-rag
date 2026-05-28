@@ -39,14 +39,16 @@ public class FileController {
     public ResponseEntity<String> fileUpload(@PathVariable("sessionId") String sessionId, @RequestParam("file") MultipartFile file) {
         try {
             if (file.isEmpty()) {
-                return ResponseEntity.badRequest().build();
+                return ResponseEntity.badRequest().body("文件为空");
             }
-//            String fileName = fileService.fileUpload(file);
-//            fileDataService.save(fileName, sessionId);
-            pdfVectorService.savePdfVector(file.getResource(),sessionId);
-            return ResponseEntity.ok("fileName");
+            String fileName = fileService.fileUpload(file);
+            fileDataService.save(fileName, sessionId);
+            pdfVectorService.savePdfVector(file.getResource(), sessionId);
+            return ResponseEntity.ok(fileName);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            e.printStackTrace();
+            String msg = e.getMessage() != null ? e.getMessage() : "未知错误";
+            return ResponseEntity.badRequest().body(msg);
         }
     }
 
